@@ -162,7 +162,7 @@ def main():
             archive,
             initial_model.flatten(),
             1.0,  # Initial step size.
-            batch_size=3,
+            batch_size=2,
         ) for _ in range(5)  # Create 5 separate emitters.
         # ImprovementEmitter(
         #     archive,
@@ -185,11 +185,26 @@ def main():
 
         # Evaluate the models and record the objectives and BCs.
         objs, bcs = [], []
-        grav = -3.0    # default: -10.0
+        grav = -10.0    # default: -10.0
         wp = 0.0        # default: 0.0
         for model in sols:
-            env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
-            obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
+            # We will average the model on a few simulations, to enforce some policy robustness
+            avging_runs = 2
+            mod_objs = []
+            mod_impact_x_poss = []
+            mod_impact_y_vels = []
+            for i in range(avging_runs):
+                env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
+                obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
+                mod_objs.append(obj)
+                mod_impact_x_poss.append(impact_x_pos)
+                mod_impact_y_vels.append(impact_y_vel)
+
+            # Get avg results
+            obj = sum(mod_objs) / len(mod_objs)
+            impact_x_pos = sum(mod_impact_x_poss) / len(mod_impact_x_poss)
+            impact_y_vel = sum(mod_impact_y_vels) / len(mod_impact_y_vels)
+
             objs.append(obj)
             bcs.append([impact_x_pos, impact_y_vel])
 
@@ -220,7 +235,7 @@ def main():
 
     # Show some example trajectories ----------------
     seed = 123
-    grav = -3.0    # default: -10.0
+    grav = -10.0     # default: -10.0
     wp = 0.0        # default: 0.0
     env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)
 
