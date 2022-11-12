@@ -26,25 +26,6 @@ import torch.nn.functional as F
 }
 """
 
-# Policy Network
-class PolicyNet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        # Observation space size 8: lander x/y coords, x/y linear velocities, angle, angular velocity, 
-        # one boolean representing whether each leg is in contact with ground or not
-        #
-        # Output: 1 of 4 discrete actions
-        self.fc1 = nn.Linear(8, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, 4)
-        
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        x = F.softmax(x, dim=0)
-        return x
-
 def save_heatmap(archive, filename):
     """Saves a heatmap of the optimizer's archive to the filename.
 
@@ -54,10 +35,11 @@ def save_heatmap(archive, filename):
     """
     fig, ax = plt.subplots(figsize=(8, 6))
     grid_archive_heatmap(archive, vmin=-300, vmax=300, ax=ax)
-    ax.invert_yaxis()  # Makes more sense if larger velocities are on top.
-    ax.set_ylabel("Impact y-velocity")
-    ax.set_xlabel("Impact x-position")
+    # ax.invert_xaxis()  # Makes more sense if larger gravities are on top.
+    ax.set_xlabel("Gravity")
+    ax.set_ylabel("Wind Power")
     fig.savefig(filename)
+    fig.show()
 
 
 def save_metrics(outdir, metrics):
@@ -152,7 +134,7 @@ def main():
     # Grid archive stores solutions (models) in a rectangular grid
     archive = GridArchive(
         [5, 5],  # 5 bins in each dimension.
-        [(-1.0, 1.0), (-3.0, 0)],  # (-1, 1) for x-pos and (-3, 0) for y-vel.
+        [(-10.0, 0.0), (0.0, 20.0)],  # (-10, 0) for gravity and (0, 20) for wind power.
     )
 
     # Improvement emitter uses CMA-ES to search for policies which add new entries to the archive or improve existing ones
@@ -162,14 +144,8 @@ def main():
             archive,
             initial_model.flatten(),
             1.0,  # Initial step size.
-            batch_size=2,
+            batch_size=3,
         ) for _ in range(5)  # Create 5 separate emitters.
-        # ImprovementEmitter(
-        #     archive,
-        #     initial_model.flatten(),
-        #     1.0,  # Initial step size.
-        #     batch_size=3,
-        # ) for _ in range(5)  # Create 5 separate emitters.
     ]
 
     # Optimizer connects archive and emitter together
@@ -185,28 +161,35 @@ def main():
 
         # Evaluate the models and record the objectives and BCs.
         objs, bcs = [], []
-        grav = -10.0    # default: -10.0
-        wp = 0.0        # default: 0.0
+        # grav = -10.0    # default: -10.0
+        # wp = 0.0        # default: 0.0
         for model in sols:
+            # Random sample env parameters from uniform distribution
+            grav = np.random.uniform(-10.0, 0.0)
+            wp = np.random.uniform(0.0, 20.0)
             # We will average the model on a few simulations, to enforce some policy robustness
             avging_runs = 2
             mod_objs = []
-            mod_impact_x_poss = []
-            mod_impact_y_vels = []
+            # mod_impact_x_poss = []
+            # mod_impact_y_vels = []
             for i in range(avging_runs):
                 env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
                 obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
                 mod_objs.append(obj)
-                mod_impact_x_poss.append(impact_x_pos)
-                mod_impact_y_vels.append(impact_y_vel)
+                # mod_impact_x_poss.append(impact_x_pos)
+                # mod_impact_y_vels.append(impact_y_vel)
 
             # Get avg results
             obj = sum(mod_objs) / len(mod_objs)
-            impact_x_pos = sum(mod_impact_x_poss) / len(mod_impact_x_poss)
-            impact_y_vel = sum(mod_impact_y_vels) / len(mod_impact_y_vels)
+            # impact_x_pos = sum(mod_impact_x_poss) / len(mod_impact_x_poss)
+            # impact_y_vel = sum(mod_impact_y_vels) / len(mod_impact_y_vels)
 
             objs.append(obj)
-            bcs.append([impact_x_pos, impact_y_vel])
+            bcs.append([grav, wp])
+
+            # print("score: ", obj)
+            # print("grav: ", grav)
+            # print("wp: ", wp)
 
         # Send the results back to the optimizer.
         optimizer.tell(objs, bcs)
@@ -224,34 +207,6 @@ def main():
     outdir.mkdir(exist_ok=True)
     optimizer.archive.as_pandas().to_csv(outdir / "archive.csv")
     save_heatmap(optimizer.archive, str(outdir / "heatmap.png"))
-
-    # Plotting --------------------------------------
-    plt.figure(figsize=(8, 6))
-    grid_archive_heatmap(archive, vmin=-300, vmax=300)
-    plt.gca().invert_yaxis()  # Makes more sense if larger velocities are on top.
-    plt.ylabel("Impact y-velocity")
-    plt.xlabel("Impact x-position")
-    plt.show()
-
-    # Show some example trajectories ----------------
-    seed = 123
-    grav = -10.0     # default: -10.0
-    wp = 0.0        # default: 0.0
-    env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)
-
-    # elite = archive.elite_with_behavior([-0.4, -0.50]) # Choose a behaviour which impacts on left
-    # for i in range(10):
-    #     simulate(env, elite.sol, seed)
-
-    # Run some demos
-    num_tests = 10
-    rewards = []
-    elite = archive.elite_with_behavior([0, 0]) # Choose a behaviour which comes straight down
-    for i in range(num_tests):
-        reward, _, _ = simulate(env, elite.sol, seed)
-        print("Total Reward: ", reward)
-        rewards.append(reward)
-    print("Avg Reward: ", sum(rewards)/len(rewards))
 
 if __name__ == "__main__":
     main()

@@ -78,22 +78,42 @@ def simulate(env, model, seed:int=123):
 def main():
     # Init env with parameters
     seed = 123
-    grav = -3.0    # default: -10.0
-    wp = 0.0        # default: 0.0
-    env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)
-
+    env = gym.make("LunarLander-v2")
     # Policy dims
     action_dim = env.action_space.n
     obs_dim = env.observation_space.shape[0]
 
-    # Load elite
+    # Load elite archive
     df = ArchiveDataFrame(pd.read_csv("./CPSC532J_FinalProject/lunar_lander_MAP_outputs/archive.csv"))
-    df_closest = df.iloc[(df['behavior_1']-0.0).abs().argsort()[:1]]    # Find elite which descends straight down
-    elite = df_closest.loc[:, "solution_0":"solution_31"].to_numpy().reshape((action_dim, obs_dim))    # Extract model
 
     # Run some demos
-    num_tests = 5
+    num_tests = 10
+
+    # Elite Region Parameters ------------------------
+    el_grav = -10.0    # default: -10.0, range: [-10, 0]
+    el_wp = 15.0        # default: 0.0, range: [0, 20]
+    # ------------------------------------------------
+    # Env Parameters ---------------------------------
+    grav = -10.0    # default: -10.0, range: [-10, 0]
+    wp = 15.0        # default: 0.0, range: [0, 20]
+    # ------------------------------------------------
+
+    # Get elite for this environment parameter region
+    df_dists = np.sqrt(np.power(df["behavior_0"]-el_grav,2) + np.power(df["behavior_1"]-el_wp,2)) 
+    idx = df_dists.argsort()[:1]
+    df_closest = df.iloc[idx] 
+    # print(df_closest)
+    print("-- Elite Params --")
+    print("Gravity: ", el_grav, " Wind Power: ,", el_wp)
+    print("Recorded score: ", df_closest.at[0,"objective"])
+    elite = df_closest.loc[:, "solution_0":"solution_31"].to_numpy().reshape((action_dim, obs_dim))         # Extract model params
+
+    # Create env and run some simulations to evaluate
+    print("-- Env Params --")
+    print("Gravity: ", grav, " Wind Power: ,", wp)
+    env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)    # Create env of this type
     rewards = []
+    print("\n ---- Simulation Results ---- ")
     for i in range(num_tests):
         reward, _, _ = simulate(env, elite, seed)
         print("Total Reward: ", reward)

@@ -8,8 +8,13 @@ from pathlib import Path
 
 from ribs.archives import GridArchive
 from ribs.emitters import ImprovementEmitter
+from ribs.emitters import GaussianEmitter
 from ribs.optimizers import Optimizer
 from ribs.visualize import grid_archive_heatmap
+
+import torch
+from torch import nn
+import torch.nn.functional as F
 
 """ CITATION:
 @article{pyribs_lunar_lander,
@@ -20,6 +25,25 @@ from ribs.visualize import grid_archive_heatmap
   url     = {https://docs.pyribs.org/en/stable/tutorials/lunar_lander.html}
 }
 """
+
+# Policy Network
+class PolicyNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # Observation space size 8: lander x/y coords, x/y linear velocities, angle, angular velocity, 
+        # one boolean representing whether each leg is in contact with ground or not
+        #
+        # Output: 1 of 4 discrete actions
+        self.fc1 = nn.Linear(8, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, 4)
+        
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        x = F.softmax(x, dim=0)
+        return x
 
 def save_heatmap(archive, filename):
     """Saves a heatmap of the optimizer's archive to the filename.
@@ -55,7 +79,7 @@ def save_metrics(outdir, metrics):
     with (outdir / "metrics.json").open("w") as file:
         json.dump(metrics, file, indent=2)
 
-def simulate(env, model, seed=None):
+def simulate(env, model, seed:int=123):
     """Simulates the lunar lander model.
 
     Args:
@@ -70,8 +94,8 @@ def simulate(env, model, seed=None):
         impact_y_vel (float): The y velocity of the lander when it touches the
             ground for the first time.
     """
-    if seed is not None:
-        env.seed(seed)
+    # if seed is not None:
+    #     env.seed(seed)
 
     action_dim = env.action_space.n
     obs_dim = env.observation_space.shape[0]
@@ -81,7 +105,7 @@ def simulate(env, model, seed=None):
     impact_x_pos = None
     impact_y_vel = None
     all_y_vels = []
-    obs = env.reset()
+    obs = env.reset(seed=seed)
     obs = obs[0]
     done = False
 
@@ -120,26 +144,32 @@ def simulate(env, model, seed=None):
 
 def main():
     # Setup ----------------------------------------
-    env = gym.make("LunarLander-v2")
-    seed = None
+    env = gym.make("LunarLander-v2", enable_wind=True)
+    seed = 123
     action_dim = env.action_space.n
     obs_dim = env.observation_space.shape[0]
 
     # Grid archive stores solutions (models) in a rectangular grid
     archive = GridArchive(
-        [25, 25],  # 25 bins in each dimension.
+        [5, 5],  # 5 bins in each dimension.
         [(-1.0, 1.0), (-3.0, 0)],  # (-1, 1) for x-pos and (-3, 0) for y-vel.
     )
 
     # Improvement emitter uses CMA-ES to search for policies which add new entries to the archive or improve existing ones
     initial_model = np.zeros((action_dim, obs_dim))
     emitters = [
-        ImprovementEmitter(
+        GaussianEmitter(
             archive,
             initial_model.flatten(),
             1.0,  # Initial step size.
-            batch_size=3,
+            batch_size=2,
         ) for _ in range(5)  # Create 5 separate emitters.
+        # ImprovementEmitter(
+        #     archive,
+        #     initial_model.flatten(),
+        #     1.0,  # Initial step size.
+        #     batch_size=3,
+        # ) for _ in range(5)  # Create 5 separate emitters.
     ]
 
     # Optimizer connects archive and emitter together
@@ -155,8 +185,26 @@ def main():
 
         # Evaluate the models and record the objectives and BCs.
         objs, bcs = [], []
+        grav = -10.0    # default: -10.0
+        wp = 0.0        # default: 0.0
         for model in sols:
-            obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
+            # We will average the model on a few simulations, to enforce some policy robustness
+            avging_runs = 3
+            mod_objs = []
+            mod_impact_x_poss = []
+            mod_impact_y_vels = []
+            for i in range(avging_runs):
+                env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
+                obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
+                mod_objs.append(obj)
+                mod_impact_x_poss.append(impact_x_pos)
+                mod_impact_y_vels.append(impact_y_vel)
+
+            # Get avg results
+            obj = sum(mod_objs) / len(mod_objs)
+            impact_x_pos = sum(mod_impact_x_poss) / len(mod_impact_x_poss)
+            impact_y_vel = sum(mod_impact_y_vels) / len(mod_impact_y_vels)
+
             objs.append(obj)
             bcs.append([impact_x_pos, impact_y_vel])
 
@@ -186,14 +234,24 @@ def main():
     plt.show()
 
     # Show some example trajectories ----------------
-    env = gym.make("LunarLander-v2", render_mode="human")
+    seed = 123
+    grav = -10.0     # default: -10.0
+    wp = 0.0        # default: 0.0
+    env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)
 
-    elite = archive.elite_with_behavior([-0.4, -0.50]) # Choose a behaviour which impacts on left
-    for i in range(10):
-        simulate(env, elite.sol, seed)
+    # elite = archive.elite_with_behavior([-0.4, -0.50]) # Choose a behaviour which impacts on left
+    # for i in range(10):
+    #     simulate(env, elite.sol, seed)
+
+    # Run some demos
+    num_tests = 10
+    rewards = []
     elite = archive.elite_with_behavior([0, 0]) # Choose a behaviour which comes straight down
-    for i in range(10):
-        simulate(env, elite.sol, seed)
+    for i in range(num_tests):
+        reward, _, _ = simulate(env, elite.sol, seed)
+        print("Total Reward: ", reward)
+        rewards.append(reward)
+    print("Avg Reward: ", sum(rewards)/len(rewards))
 
 if __name__ == "__main__":
     main()
