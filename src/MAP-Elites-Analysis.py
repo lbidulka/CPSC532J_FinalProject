@@ -2,7 +2,7 @@ import gym
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import json
 from pathlib import Path
 import pandas as pd
@@ -24,10 +24,6 @@ def simulate(env, model, seed:int=123):
     Returns:
         total_reward (float): The reward accrued by the lander throughout its
             trajectory.
-        impact_x_pos (float): The x position of the lander when it touches the
-            ground for the first time.
-        impact_y_vel (float): The y velocity of the lander when it touches the
-            ground for the first time.
     """
 
     action_dim = env.action_space.n
@@ -35,10 +31,7 @@ def simulate(env, model, seed:int=123):
     model = model.reshape((action_dim, obs_dim))
 
     total_reward = 0.0
-    impact_x_pos = None
-    impact_y_vel = None
-    all_y_vels = []
-    obs = env.reset(seed=123)
+    obs = env.reset(seed=seed)
     obs = obs[0]
     done = False
 
@@ -50,30 +43,20 @@ def simulate(env, model, seed:int=123):
         step_count += 1
         total_reward += reward
 
-        # Refer to the definition of state here:
-        # https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py#L306
-        x_pos = obs[0]
-        y_vel = obs[3]
-        leg0_touch = bool(obs[6])
-        leg1_touch = bool(obs[7])
-        all_y_vels.append(y_vel)
-
-        # Check if the lunar lander is impacting for the first time.
-        if impact_x_pos is None and (leg0_touch or leg1_touch):
-            impact_x_pos = x_pos
-            impact_y_vel = y_vel
-
         if step_count >= 1000:
             break
 
-    # If the lunar lander did not land, set the x-pos to the one from the final
-    # timestep, and set the y-vel to the max y-vel (we use min since the lander
-    # goes down).
-    if impact_x_pos is None:
-        impact_x_pos = x_pos
-        impact_y_vel = min(all_y_vels)
+    return total_reward
 
-    return total_reward, impact_x_pos, impact_y_vel
+def retrieve_elite(df, grav, wp, action_dim, obs_dim):
+    df_dists = np.sqrt(np.power(df["behavior_0"]-grav,2) + np.power(df["behavior_1"]-wp,2)) 
+    idx = df_dists.argsort()[:1]
+    df_closest = df.iloc[idx] 
+    elite_score = df_closest["objective"]
+    elite = df_closest.loc[:, "solution_0":"solution_31"].to_numpy().reshape((action_dim, obs_dim))         # Extract model params
+
+    return elite, elite_score
+
 
 def main():
     # Init env with parameters
@@ -91,32 +74,28 @@ def main():
 
     # Elite Region Parameters ------------------------
     el_grav = -10.0    # default: -10.0, range: [-10, 0]
-    el_wp = 15.0        # default: 0.0, range: [0, 20]
+    el_wp = 0.0        # default: 0.0, range: [0, 20]
     # ------------------------------------------------
     # Env Parameters ---------------------------------
     grav = -10.0    # default: -10.0, range: [-10, 0]
-    wp = 15.0        # default: 0.0, range: [0, 20]
+    wp = 0.0        # default: 0.0, range: [0, 20]
     # ------------------------------------------------
 
-    # Get elite for this environment parameter region
-    df_dists = np.sqrt(np.power(df["behavior_0"]-el_grav,2) + np.power(df["behavior_1"]-el_wp,2)) 
-    idx = df_dists.argsort()[:1]
-    df_closest = df.iloc[idx] 
-    # print(df_closest)
+    elite, elite_score = retrieve_elite(df, el_grav, el_wp, action_dim, obs_dim)
+
     print("-- Elite Params --")
     print("Gravity: ", el_grav, " Wind Power: ,", el_wp)
-    print("Recorded score: ", df_closest.at[0,"objective"])
-    elite = df_closest.loc[:, "solution_0":"solution_31"].to_numpy().reshape((action_dim, obs_dim))         # Extract model params
+    print("Recorded score: ", elite_score) 
 
     # Create env and run some simulations to evaluate
     print("-- Env Params --")
     print("Gravity: ", grav, " Wind Power: ,", wp)
     env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)    # Create env of this type
     rewards = []
-    print("\n ---- Simulation Results ---- ")
+    print("\n ---- Simulation Results (", str(num_tests)," Runs)---- ")
     for i in range(num_tests):
-        reward, _, _ = simulate(env, elite, seed)
-        print("Total Reward: ", reward)
+        reward = simulate(env, elite, seed)
+        print(str(i) + ". Total Reward: ", reward)
         rewards.append(reward)
     print("Avg Reward: ", sum(rewards)/len(rewards))
 

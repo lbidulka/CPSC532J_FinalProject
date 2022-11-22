@@ -2,7 +2,7 @@ import gym
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import json
 from pathlib import Path
 import pandas as pd
@@ -10,23 +10,13 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from models import Survivor
+
 from ribs.archives import ArchiveDataFrame
 from ribs.archives import GridArchive
 from ribs.emitters import ImprovementEmitter
 from ribs.optimizers import Optimizer
 from ribs.visualize import grid_archive_heatmap
-
-# Initial survival network
-class GANet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(8, 16)
-        self.fc2 = nn.Linear(16, 4)
-        
-    def forward(self, x):
-        x = torch.tanh(self.fc1(x))
-        x = torch.tanh(self.fc2(x))
-        return x
 
 def simulate(env, survivor, elite, seed:int=123):
     """Simulates the lunar lander model.
@@ -50,7 +40,7 @@ def simulate(env, survivor, elite, seed:int=123):
     done = False
 
     step_count = 0
-    step_limit = 75
+    step_limit = 50
 
     # Survivor hovering loop
     while not done:
@@ -100,16 +90,16 @@ def main():
     num_tests = 10
 
     # Elite Region Parameters ------------------------
-    el_grav = -5.0    # default: -10.0, range: [-10, 0]
-    el_wp = 10.0        # default: 0.0, range: [0, 20]
+    el_grav = -8.0    # default: -10.0, range: [-10, 0]
+    el_wp = 5.0        # default: 0.0, range: [0, 20]
     # ------------------------------------------------
     # Env Parameters ---------------------------------
-    grav = -5.0    # default: -10.0, range: [-10, 0]
-    wp = 10.0        # default: 0.0, range: [0, 20]
+    grav = -8.0    # default: -10.0, range: [-10, 0]
+    wp = 5.0        # default: 0.0, range: [0, 20]
     # ------------------------------------------------
 
     # Load survivor and elite models
-    survivor = torch.load("./CPSC532J_FinalProject/src/models/GA-policy.pth")
+    survivor = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor-policy.pth")
     survivor.eval()
     elite, elite_score = retrieve_elite(df, el_grav, el_wp, action_dim, obs_dim)
     

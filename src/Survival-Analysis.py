@@ -2,7 +2,7 @@ import gym
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import json
 from pathlib import Path
 import pandas as pd
@@ -27,7 +27,6 @@ class GANet(nn.Module):
         x = torch.tanh(self.fc1(x))
         x = torch.tanh(self.fc2(x))
         return x
-
 
 def simulate(env, model, seed:int=123):
     """Simulates the lunar lander model.
@@ -80,28 +79,20 @@ def main():
     obs_dim = env.observation_space.shape[0]
 
     # Load elite 
-    elite = GANet()
-    elite = torch.load("./CPSC532J_FinalProject/src/models/GA-policy.pth")
+    elite = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor-policy.pth")
     elite.eval()
 
     # Run some demos
     num_tests = 10
 
-    # Elite Region Parameters ------------------------
-    el_grav = -10.0    # default: -10.0, range: [-10, 0]
-    el_wp = 0.0        # default: 0.0, range: [0, 20]
-    # ------------------------------------------------
     # Env Parameters ---------------------------------
     grav = -10.0    # default: -10.0, range: [-10, 0]
     wp = 0.0        # default: 0.0, range: [0, 20]
     # ------------------------------------------------
-
-    print("-- Elite Params --")
-    print("Gravity: ", el_grav, " Wind Power: ,", el_wp)
-
-    # Create env and run some simulations to evaluate
     print("-- Env Params --")
     print("Gravity: ", grav, " Wind Power: ,", wp)
+    
+    # Create env and run some simulations to evaluate
     env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)    # Create env of this type
     rewards = []
     print("\n ---- Simulation Results (", str(num_tests)," Runs)---- ")

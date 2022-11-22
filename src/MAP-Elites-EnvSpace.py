@@ -2,7 +2,7 @@ import gym
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import json
 from pathlib import Path
 
@@ -133,18 +133,18 @@ def main():
 
     # Grid archive stores solutions (models) in a rectangular grid
     archive = GridArchive(
-        [5, 5],  # 5 bins in each dimension.
+        [7, 7],  # 5 bins in each dimension.
         [(-10.0, 0.0), (0.0, 20.0)],  # (-10, 0) for gravity and (0, 20) for wind power.
     )
 
-    # Improvement emitter uses CMA-ES to search for policies which add new entries to the archive or improve existing ones
+    # GAUSS EMITTER IS GOOD HERE.... explain why
     initial_model = np.zeros((action_dim, obs_dim))
     emitters = [
         GaussianEmitter(
             archive,
             initial_model.flatten(),
             1.0,  # Initial step size.
-            batch_size=3,
+            batch_size=10,
         ) for _ in range(5)  # Create 5 separate emitters.
     ]
 
@@ -161,35 +161,23 @@ def main():
 
         # Evaluate the models and record the objectives and BCs.
         objs, bcs = [], []
-        # grav = -10.0    # default: -10.0
-        # wp = 0.0        # default: 0.0
         for model in sols:
             # Random sample env parameters from uniform distribution
             grav = np.random.uniform(-10.0, 0.0)
             wp = np.random.uniform(0.0, 20.0)
             # We will average the model on a few simulations, to enforce some policy robustness
-            avging_runs = 2
+            avging_runs = 5
             mod_objs = []
-            # mod_impact_x_poss = []
-            # mod_impact_y_vels = []
             for i in range(avging_runs):
                 env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
                 obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
                 mod_objs.append(obj)
-                # mod_impact_x_poss.append(impact_x_pos)
-                # mod_impact_y_vels.append(impact_y_vel)
 
             # Get avg results
             obj = sum(mod_objs) / len(mod_objs)
-            # impact_x_pos = sum(mod_impact_x_poss) / len(mod_impact_x_poss)
-            # impact_y_vel = sum(mod_impact_y_vels) / len(mod_impact_y_vels)
 
             objs.append(obj)
             bcs.append([grav, wp])
-
-            # print("score: ", obj)
-            # print("grav: ", grav)
-            # print("wp: ", wp)
 
         # Send the results back to the optimizer.
         optimizer.tell(objs, bcs)

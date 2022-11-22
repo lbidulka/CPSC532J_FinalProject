@@ -8,21 +8,11 @@ import time
 import argparse
 import copy
 
+from models import Survivor
+
 import torch
 from torch import nn
 import torch.nn.functional as F
-
-# Policy Network
-class GANet(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(8, 16)
-        self.fc2 = nn.Linear(16, 4)
-        
-    def forward(self, x):
-        x = torch.tanh(self.fc1(x))
-        x = torch.tanh(self.fc2(x))
-        return x
 
 def run_episode(env, policy, seed, render=False):
     # Log rewards
@@ -31,6 +21,7 @@ def run_episode(env, policy, seed, render=False):
     terminal = False
     frame_count = 0
     state, _ = env.reset(seed=seed)
+    init_state = state
     step_limit = 75
     while frame_count < step_limit:
         if render:
@@ -41,15 +32,9 @@ def run_episode(env, policy, seed, render=False):
 
         # Take action and observe environment
         state, reward, terminal, _, _ = env.step(action.numpy())
-        # Penalize Eucl. distance from starting point
-        sp_dist = np.linalg.norm(state[:2] - [0, 1.4], 2)   
-        fitness -= sp_dist  
-
-        # Penalize any final angular velocity
-        if frame_count + 5 >= step_limit:
-            ang_vels = state[4:6]
-            vel_penalty = np.abs(ang_vels).sum()
-            fitness -= vel_penalty
+        # Penalize Eucl. distance from starting state, except lander legs status which have no impact
+        sp_dist = np.linalg.norm(state[:-2] - init_state[:-2], 2)   
+        fitness -= sp_dist
 
         frame_count += 1
     env.close()
@@ -64,17 +49,15 @@ def train(args, env):
     # Setup ----------------------------------------
     env = gym.make("LunarLander-v2", enable_wind=True)
     seed = 123
-    action_dim = env.action_space.n
-    obs_dim = env.observation_space.shape[0]
 
     # Create initial population
     pop = []
     pop_fitness = torch.zeros(args.pop_size)
     for i in range(args.pop_size):
-        pop.append(GANet())
+        pop.append(Survivor())
 
     # Train for a number of episodes
-    num_avgruns = 3
+    num_avgruns = 5
     for generation in range(args.GN):
         print("Gen: ", str(generation))
         rewards = []
@@ -83,6 +66,10 @@ def train(args, env):
         for i in tqdm(range(len(pop))):
             temp_fitness = []
             for j in range(num_avgruns):
+                # Random sample env parameters from uniform distribution
+                grav = np.random.uniform(-10.0, 0.0)
+                wp = np.random.uniform(0.0, 20.0)
+                env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
                 temp_fitness.append(run_episode(env, pop[i], render=False, seed=seed))
             pop_fitness[i] = sum(temp_fitness)/len(temp_fitness)
         # Record average performance of population
@@ -111,12 +98,12 @@ def train(args, env):
         pop = new_pop
         pop_fitness = torch.zeros(len(pop))
 
-    torch.save(new_pop[0], "./CPSC532J_FinalProject/src/models/GA-policy.pth")
+    torch.save(new_pop[0], "./CPSC532J_FinalProject/src/model_checkpoints/Survivor-policy.pth")
     return avg_fitnesses, max_fitnesses
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--GN", default=30, help="num generations", type=int)
+    parser.add_argument("--GN", default=25, help="num generations", type=int)
     parser.add_argument("--pop_size", default=150, help="initial population size", type=int)
     parser.add_argument("--num_elites", default=3, help="number of elites saved per episode", type=int)
     parser.add_argument("--num_offspring", default=30, help="number of offspring generated from each elite per episode", type=int)
