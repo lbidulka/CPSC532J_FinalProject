@@ -50,7 +50,7 @@ def main():
     elite.eval()
 
     # Run some demos
-    num_tests = 100000
+    num_tests = 250000
     
     print("Running sims...")
     trajectories = []
