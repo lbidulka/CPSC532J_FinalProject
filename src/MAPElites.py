@@ -6,6 +6,8 @@ from tqdm import tqdm
 import json
 from pathlib import Path
 
+from models import Survivor
+
 from ribs.archives import GridArchive
 from ribs.emitters import ImprovementEmitter
 from ribs.emitters import GaussianEmitter
@@ -61,68 +63,48 @@ def save_metrics(outdir, metrics):
     with (outdir / "metrics.json").open("w") as file:
         json.dump(metrics, file, indent=2)
 
-def simulate(env, model, seed:int=123):
-    """Simulates the lunar lander model.
-
-    Args:
-        env (gym.Env): A copy of the lunar lander environment.
-        model (np.ndarray): The array of weights for the linear policy.
-        seed (int): The seed for the environment.
-    Returns:
-        total_reward (float): The reward accrued by the lander throughout its
-            trajectory.
-        impact_x_pos (float): The x position of the lander when it touches the
-            ground for the first time.
-        impact_y_vel (float): The y velocity of the lander when it touches the
-            ground for the first time.
-    """
-    # if seed is not None:
-    #     env.seed(seed)
-
-    action_dim = env.action_space.n
-    obs_dim = env.observation_space.shape[0]
-    model = model.reshape((action_dim, obs_dim))
+# Simulates the survivor in the environment 
+def sim_survivor(env, survivor, seed:int=123):
 
     total_reward = 0.0
-    impact_x_pos = None
-    impact_y_vel = None
-    all_y_vels = []
-    obs = env.reset(seed=seed)
-    obs = obs[0]
+    state = env.reset(seed=seed)
+    state = state[0]
     done = False
 
     step_count = 0
+    step_limit = 50
 
     while not done:
-        action = np.argmax(model @ obs)  # Linear policy.
-        obs, reward, done, info, _ = env.step(action)
+        probs = survivor(torch.from_numpy(state))
+        action = torch.argmax(probs)
+        state, reward, done, info, _ = env.step(action.numpy())
         step_count += 1
         total_reward += reward
 
-        # Refer to the definition of state here:
-        # https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py#L306
-        x_pos = obs[0]
-        y_vel = obs[3]
-        leg0_touch = bool(obs[6])
-        leg1_touch = bool(obs[7])
-        all_y_vels.append(y_vel)
-
-        # Check if the lunar lander is impacting for the first time.
-        if impact_x_pos is None and (leg0_touch or leg1_touch):
-            impact_x_pos = x_pos
-            impact_y_vel = y_vel
-
-        if step_count >= 1000:
+        if step_count >= step_limit:
             break
 
-    # If the lunar lander did not land, set the x-pos to the one from the final
-    # timestep, and set the y-vel to the max y-vel (we use min since the lander
-    # goes down).
-    if impact_x_pos is None:
-        impact_x_pos = x_pos
-        impact_y_vel = min(all_y_vels)
+    return total_reward, None, state, step_count
 
-    return total_reward, impact_x_pos, impact_y_vel
+# Simulates the elite in the environment starting from where the survivor left off
+def sim_elite(env, elite, state, step_count):
+    action_dim = env.action_space.n
+    obs_dim = env.observation_space.shape[0]
+    elite = elite.reshape((action_dim, obs_dim))
+     
+    total_reward = 0.0
+    done = False
+
+    while not done:
+        action = np.argmax(elite @ state)  # Linear policy.
+        state, reward, done, info, _ = env.step(action)
+        step_count += 1
+        total_reward += reward
+
+        if step_count >= 950:
+            break
+
+    return total_reward
 
 def main():
     # Setup ----------------------------------------
@@ -130,6 +112,10 @@ def main():
     seed = 123
     action_dim = env.action_space.n
     obs_dim = env.observation_space.shape[0]
+
+    # Load survivor model
+    survivor = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor-policy.pth")
+    survivor.eval()
 
     # Grid archive stores solutions (models) in a rectangular grid
     archive = GridArchive(
@@ -170,7 +156,10 @@ def main():
             mod_objs = []
             for i in range(avging_runs):
                 env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
-                obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
+                surv_reward, surv_trajectory, surv_end_state, surv_step_count = sim_survivor(env, survivor, seed)
+                elite_reward = sim_elite(env, model, surv_end_state, surv_step_count)
+                obj = surv_reward + elite_reward
+                # obj, impact_x_pos, impact_y_vel = simulate(env, model, seed)
                 mod_objs.append(obj)
 
             # Get avg results
