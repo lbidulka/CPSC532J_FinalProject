@@ -54,7 +54,7 @@ def train(args):
         pop.append(GA_Generalist())
 
     # Train for a number of episodes
-    num_avgruns = 5
+    num_avgruns = 10
     for generation in tqdm(range(args.GN)):
         rewards = []
         new_pop = []
@@ -105,7 +105,7 @@ def train(args):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--GN", default=25, help="num generations", type=int)
+    parser.add_argument("--GN", default=50, help="num generations", type=int)
     parser.add_argument("--pop_size", default=250, help="initial population size", type=int)
     parser.add_argument("--num_elites", default=3, help="number of elites saved per episode", type=int)
     parser.add_argument("--num_offspring", default=30, help="number of offspring generated from each elite per episode", type=int)

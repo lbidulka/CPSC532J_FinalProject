@@ -6,7 +6,8 @@ from tqdm import tqdm
 import json
 from pathlib import Path
 
-from models import Survivor
+from CPSC532J_FinalProject.src.models import Survivor
+from sim_utils import sim_elite, sim_survivor
 
 from ribs.archives import GridArchive
 from ribs.emitters import ImprovementEmitter
@@ -63,49 +64,6 @@ def save_metrics(outdir, metrics):
     with (outdir / "metrics.json").open("w") as file:
         json.dump(metrics, file, indent=2)
 
-# Simulates the survivor in the environment 
-def sim_survivor(env, survivor, seed:int=123):
-
-    total_reward = 0.0
-    state = env.reset(seed=seed)
-    state = state[0]
-    done = False
-
-    step_count = 0
-    step_limit = 50
-
-    while not done:
-        probs = survivor(torch.from_numpy(state))
-        action = torch.argmax(probs)
-        state, reward, done, info, _ = env.step(action.numpy())
-        step_count += 1
-        total_reward += reward
-
-        if step_count >= step_limit:
-            break
-
-    return total_reward, None, state, step_count
-
-# Simulates the elite in the environment starting from where the survivor left off
-def sim_elite(env, elite, state, step_count):
-    action_dim = env.action_space.n
-    obs_dim = env.observation_space.shape[0]
-    elite = elite.reshape((action_dim, obs_dim))
-     
-    total_reward = 0.0
-    done = False
-
-    while not done:
-        action = np.argmax(elite @ state)  # Linear policy.
-        state, reward, done, info, _ = env.step(action)
-        step_count += 1
-        total_reward += reward
-
-        if step_count >= 950:
-            break
-
-    return total_reward
-
 def main():
     # Setup ----------------------------------------
     env = gym.make("LunarLander-v2", enable_wind=True)
@@ -152,7 +110,7 @@ def main():
             grav = np.random.uniform(-10.0, 0.0)
             wp = np.random.uniform(0.0, 20.0)
             # We will average the model on a few simulations, to enforce some policy robustness
-            avging_runs = 5
+            avging_runs = 10
             mod_objs = []
             for i in range(avging_runs):
                 env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
@@ -177,6 +135,13 @@ def main():
             print(f"> {itr} itrs completed after {elapsed_time:.2f} s")
             print(f"  - Archive Size: {len(archive)}")
             print(f"  - Max Score: {archive.stats.obj_max}")
+            # Save ------------------------------------------
+            outdir = "./CPSC532J_FinalProject/lunar_lander_MAP_outputs"
+            outdir = Path(outdir)
+            outdir.mkdir(exist_ok=True)
+            optimizer.archive.as_pandas().to_csv(outdir / "archive.csv")
+            save_heatmap(optimizer.archive, str(outdir / "heatmap.png"))
+            print("  - saved MAP.")            
     
     # Save ------------------------------------------
     outdir = "./CPSC532J_FinalProject/lunar_lander_MAP_outputs"

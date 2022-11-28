@@ -11,6 +11,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from models import Survivor, sysID
+from sim_utils import sim_elite, sim_episode, sim_generalist_episode, sim_survivor
 
 from ribs.archives import ArchiveDataFrame
 from ribs.archives import GridArchive
@@ -18,80 +19,9 @@ from ribs.emitters import ImprovementEmitter
 from ribs.optimizers import Optimizer
 from ribs.visualize import grid_archive_heatmap
 
-# Simulates the survivor in the environment and saves the trajectory 
-def sim_survivor(env, survivor, seed:int=123):
-    total_reward = 0.0
-    state = env.reset(seed=seed)
-    state = state[0]
-    done = False
-    step_count = 0
-    step_limit = 50
-    trajectory = []
-    while not done:
-        probs = survivor(torch.from_numpy(state))
-        action = torch.argmax(probs)
-        state, reward, done, info, _ = env.step(action.numpy())
-        step_count += 1
-        total_reward += reward
-        trajectory.append(np.concatenate((state, action.numpy().reshape((-1,)), reward.reshape((-1,)))))
-        if step_count >= step_limit:
-            break
-    trajectory = torch.from_numpy(np.stack(trajectory)).unsqueeze(0).float()
-    return total_reward, trajectory, state, step_count
-
-# Uses the system identifier network and the survivor trajectory to identify the env params
-def identify(env, identifier, trajectory):
-    sys_pred = identifier(trajectory)
-    pred_grav, pred_wp = (sys_pred[0,0].item(), sys_pred[0,1].item())
-    return pred_grav, pred_wp
-
-# Simulates the elite in the environment starting from where the survivor left off
-def sim_elite(env, elite, state, step_count):
-    action_dim = env.action_space.n
-    obs_dim = env.observation_space.shape[0]
-    elite = elite.reshape((action_dim, obs_dim))
-    total_reward = 0.0
-    done = False
-    while not done:
-        action = np.argmax(elite @ state)  # Linear policy.
-        state, reward, done, info, _ = env.step(action)
-        step_count += 1
-        total_reward += reward
-        if step_count >= 950:
-            break
-    return total_reward
-
-# Simulates a full survivor -> identifier -> elite episode
-def sim_episode(env, seed, survivor, identifier, elite_archive_df):
-    surv_reward, surv_trajectory, surv_end_state, surv_step_count = sim_survivor(env, survivor, seed)
-    if identifier == "random":
-        pred_grav = np.random.uniform(-10.0, 0.0)
-        pred_wp = np.random.uniform(0.0, 20.0)
-    elif identifier == "oracle":
-        pred_grav = env.gravity
-        pred_wp = env.wind_power
-    else:
-        pred_grav, pred_wp = identify(env, identifier, surv_trajectory)
-    action_dim = env.action_space.n
-    obs_dim = env.observation_space.shape[0]
-    elite, elite_score = retrieve_elite(elite_archive_df, pred_grav, pred_wp, action_dim, obs_dim)
-    elite_reward = sim_elite(env, elite, surv_end_state, surv_step_count)
-    total_reward = surv_reward + elite_reward
-    return total_reward, pred_grav, pred_wp
-
-# Loads an elites policy from dataframe
-def retrieve_elite(df, grav, wp, action_dim, obs_dim):
-    df_dists = np.sqrt(np.power(df["behavior_0"]-grav,2) + np.power(df["behavior_1"]-wp,2)) 
-    idx = df_dists.argsort()[:1]
-    df_closest = df.iloc[idx] 
-    elite_score = df_closest["objective"]
-    elite = df_closest.loc[:, "solution_0":"solution_31"].to_numpy().reshape((action_dim, obs_dim))         # Extract model params
-
-    return elite, elite_score
-
 # Zero shot application of elites to environment range
 def EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_archive_df):
-    print("\n ---- 0-Shot Elite Appl. (", str(num_tests)," Runs)---- ")
+    print("\n ---- 0-Shot Elite Appl. (", str(num_tests)," Runs / Setting)---- ")
     # Env setup
     grav_step, wp_step = env_range_res
     # env = gym.make("LunarLander-v2", render_mode="human", enable_wind=True, gravity=grav, wind_power=wp)    # Create env of this type 
@@ -113,13 +43,13 @@ def EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_a
             wp_range_rewards.append(rewards)
         grav_wp_rewards.append(wp_range_rewards)
 
-    print(" ---------------------------------------")
+    print(" -----------------------------------------------")
     grav_wp_rewards_arr = np.array(grav_wp_rewards)
     return grav_wp_rewards_arr
 
 # Random selection of elites after survivor agent
 def EVAL_rand_ID(num_tests, env_range_res, seed, survivor, elite_archive_df):
-    print("\n ---- Random Identifier (", str(num_tests)," Runs)---- ")
+    print("\n ---- Random Identifier (", str(num_tests)," Runs / Setting)---- ")
     # Env setup
     grav_step, wp_step = env_range_res
     grav_wp_rewards = []
@@ -140,13 +70,13 @@ def EVAL_rand_ID(num_tests, env_range_res, seed, survivor, elite_archive_df):
             wp_range_rewards.append(rewards)
         grav_wp_rewards.append(wp_range_rewards)
 
-    print(" ---------------------------------------")
+    print(" -----------------------------------------------")
     grav_wp_rewards_arr = np.array(grav_wp_rewards)
     return grav_wp_rewards_arr
 
 # "Oracle" application of exact elites to environment range
 def EVAL_oracle_ID(num_tests, env_range_res, seed, survivor, elite_archive_df):
-    print("\n ---- Oracle Identifier (", str(num_tests)," Runs)---- ")
+    print("\n ---- Oracle Identifier (", str(num_tests)," Runs / Setting)---- ")
     # Env setup
     grav_step, wp_step = env_range_res
     grav_wp_rewards = []
@@ -167,7 +97,28 @@ def EVAL_oracle_ID(num_tests, env_range_res, seed, survivor, elite_archive_df):
             wp_range_rewards.append(rewards)
         grav_wp_rewards.append(wp_range_rewards)
 
-    print(" ---------------------------------------")
+    print(" -----------------------------------------------")
+    grav_wp_rewards_arr = np.array(grav_wp_rewards)
+    return grav_wp_rewards_arr
+
+# Generalist agent evaluation
+def EVAL_Generalist(num_tests, env_range_res, seed, generalist):
+    print("\n ---- Generalist (", str(num_tests)," Runs / Setting)---- ")
+    # Env setup
+    grav_step, wp_step = env_range_res
+    grav_wp_rewards = []
+    for grav in tqdm(np.arange(-10.0, 0.0, grav_step)):
+        wp_range_rewards = []
+        for wp in np.arange(0, 20.0, wp_step):
+            rewards = []
+            for i in range(num_tests):
+                env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp) 
+                total_reward = sim_generalist_episode(env, seed, generalist)
+                rewards.append(total_reward) 
+            wp_range_rewards.append(rewards)
+        grav_wp_rewards.append(wp_range_rewards)
+
+    print(" -----------------------------------------------")
     grav_wp_rewards_arr = np.array(grav_wp_rewards)
     return grav_wp_rewards_arr
 
@@ -184,21 +135,26 @@ def main():
     env_range_res = (10/num_envparam_steps, 20/num_envparam_steps)
     np.save(log_dir + "experiments/env_range_res.npy", np.array(env_range_res))
 
-    # Load survivor, identifier, and elite models
+    # Load survivor, identifier, and GA-generalist models
     survivor = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor-prerefactor.pth")
     survivor.eval()
     identifier = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/sysID.pth").to("cpu")
     identifier.eval()    
+    GA_generalist = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/GA-general-policy.pth")
+    GA_generalist.eval()
 
-    # Run some experiments
-    zero_shot_rewards = EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_archive_df)
-    np.save(log_dir + "experiments/zero_shot_rewards.npy", zero_shot_rewards)
+    # # Run some experiments
+    # zero_shot_rewards = EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_archive_df)
+    # np.save(log_dir + "experiments/zero_shot_rewards.npy", zero_shot_rewards)
 
-    rand_ID_rewards = EVAL_rand_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
-    np.save(log_dir + "experiments/rand_ID_rewards.npy", rand_ID_rewards)
+    # rand_ID_rewards = EVAL_rand_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
+    # np.save(log_dir + "experiments/rand_ID_rewards.npy", rand_ID_rewards)
 
-    oracle_ID_rewards = EVAL_oracle_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
-    np.save(log_dir + "experiments/oracle_ID_rewards.npy", oracle_ID_rewards)
+    # oracle_ID_rewards = EVAL_oracle_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
+    # np.save(log_dir + "experiments/oracle_ID_rewards.npy", oracle_ID_rewards)
+
+    GA_generalist_rewards = EVAL_Generalist(num_tests, env_range_res, seed, GA_generalist)
+    np.save(log_dir + "experiments/GA_generalist_rewards.npy", GA_generalist_rewards)
 
 
 if __name__ == "__main__":

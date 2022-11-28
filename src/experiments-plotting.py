@@ -19,7 +19,6 @@ def plot_reward_heatmap(zero_shot_rewards, env_range_res, log_dir, out_name, tit
     reshaped_mean_rewards = np.swapaxes(mean_rewards, 0, 1)
     reshaped_mean_rewards = np.flip(reshaped_mean_rewards, axis=0)
 
-    # plt.imshow(mean_rewards, interpolation="none", extent=[0, -10, 0, 20,], aspect=1)
     plt.imshow(reshaped_mean_rewards, interpolation="none",extent=[-10, 0, 0, 20], vmin=-400, vmax=400)
     plt.colorbar()
     plt.ylabel("wp")
@@ -32,12 +31,10 @@ def plot_reward_heatmap(zero_shot_rewards, env_range_res, log_dir, out_name, tit
 
 
 def main():
-
-    # Load results
     log_dir = "./CPSC532J_FinalProject/src/logs/experiments/"
-    rewards_files = ["zero_shot_rewards.npy", "rand_ID_rewards.npy", "oracle_ID_rewards.npy"]
-    heatmap_titles = ["0-Shot Mnemosyne Reward Heatmap", "Random ID Reward Heatmap", "Oracle ID Reward Heatmap"]
-    out_names = ["zero_shot", "rand_id", "oracle_id"]
+    rewards_files = ["zero_shot_rewards.npy", "rand_ID_rewards.npy", "oracle_ID_rewards.npy", "GA_generalist_rewards.npy"]
+    heatmap_titles = ["0-Shot Mnemosyne Reward Heatmap", "Random ID Reward Heatmap", "Oracle ID Reward Heatmap", "GA Generalist Reward Heatmap"]
+    out_names = ["zero_shot", "rand_id", "oracle_id", "ga_generalist"]
     env_range_res = np.load(log_dir + "env_range_res.npy")
 
     # Plot
