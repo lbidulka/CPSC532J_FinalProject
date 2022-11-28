@@ -2,7 +2,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-
 # Initial survivor network
 class Survivor(nn.Module):
     def __init__(self):
@@ -29,3 +28,14 @@ class sysID(torch.nn.Module):
         x = torch.tanh(self.l1(x))
         x = torch.tanh(self.l2(x))
         return self.l3(x)
+
+# Gen alg. generalist Network
+class GA_Generalist(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(8, 4)
+        
+    def forward(self, x):
+        x = self.fc1(x)
+        x = F.softmax(x, dim=0)
+        return x
