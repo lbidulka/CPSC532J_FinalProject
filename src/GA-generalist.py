@@ -14,6 +14,12 @@ import torch.nn.functional as F
 
 from models import GA_Generalist
 
+SEED = 1234
+
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+
 def run_episode(env, policy, seed, render=False):
     # Log rewards
     fitness = 0
@@ -78,13 +84,6 @@ def train(args):
         for i in idx:
             new_pop.append(pop[i])
 
-        # If last 10 best elites have at least 200 score, we have solved the problem
-        if len(max_fitnesses) >= 20:
-            # print(max_fitnesses[-10:])
-            if (np.asarray(max_fitnesses[-20:]) >= 200).all():
-                torch.save(new_pop[0], "./CPSC532J_FinalProject/src/model_checkpoints/GA-general-policy.pth")
-                return avg_fitnesses, max_fitnesses
-
         # Create offspring from each of the elites
         for i in range(args.num_elites):
             elite = new_pop[i]
@@ -105,7 +104,7 @@ def train(args):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--GN", default=50, help="num generations", type=int)
+    parser.add_argument("--GN", default=78, help="num generations", type=int)
     parser.add_argument("--pop_size", default=250, help="initial population size", type=int)
     parser.add_argument("--num_elites", default=3, help="number of elites saved per episode", type=int)
     parser.add_argument("--num_offspring", default=30, help="number of offspring generated from each elite per episode", type=int)

@@ -11,7 +11,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from models import Survivor, sysID, GA_Generalist
-from sim_utils import sim_elite, sim_episode, sim_generalist_episode, sim_survivor, sim_tuning_episode, GA_tune, retrieve_elite
+from sim_utils import sim_elite, sim_episode, sim_generalist_episode, sim_survivor, sim_tuning_episode, GA_tune, retrieve_elite, identify
 
 from ribs.archives import ArchiveDataFrame
 from ribs.archives import GridArchive
@@ -155,6 +155,52 @@ def EVAL_fine_tune(num_tests, env_range_res, seed, survivor, elite_archive_df):
     grav_wp_rewards_arr = np.array(grav_wp_rewards)
     return grav_wp_rewards_arr
 
+# Testing sysID predictions
+def EVAL_sysID(num_tests, env_range_res, seed, survivor, identifier):
+    print("\n ---- Sys ID Acc (", str(num_tests)," Runs / Setting)---- ")
+    # Env setup
+    grav_step, wp_step = env_range_res
+    # I know this nested lists method is silly but its late and I'm tired and I know that it works...
+    grav_wp_gravs = []
+    grav_wp_wps = []
+    grav_wp_gravs_gt = []
+    grav_wp_wps_gt = []
+    
+    for grav in tqdm(np.arange(-10.0, 0.0, grav_step)):
+        wp_range_gravs = []
+        wp_range_wps = []
+        wp_range_gravs_gt = []
+        wp_range_wps_gt = []
+        
+        for wp in np.arange(0, 20.0, wp_step):
+            grav_preds = []
+            wp_preds = []
+            grav_gt = []
+            wp_gt = []
+            for i in range(num_tests):
+                env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp) 
+                surv_reward, surv_trajectory, surv_end_state, surv_step_count = sim_survivor(env, survivor, seed)
+                pred_grav, pred_wp = identify(env, identifier, surv_trajectory)
+                grav_preds.append(pred_grav)
+                wp_preds.append(pred_wp)
+                grav_gt.append(grav)
+                wp_gt.append(wp)
+            wp_range_gravs.append(grav_preds)
+            wp_range_wps.append(wp_preds)
+            wp_range_gravs_gt.append(grav_gt)
+            wp_range_wps_gt.append(wp_gt)
+        grav_wp_gravs.append(wp_range_gravs)
+        grav_wp_wps.append(wp_range_wps)
+        grav_wp_gravs_gt.append(wp_range_gravs_gt)
+        grav_wp_wps_gt.append(wp_range_wps_gt)
+
+    print(" -----------------------------------------------")
+    grav_wp_gravs_arr = np.array(grav_wp_gravs)
+    grav_wp_wps_arr = np.array(grav_wp_wps)   
+    grav_wp_gravs_gt_arr = np.array(grav_wp_gravs_gt)
+    grav_wp_wps_gt_arr = np.array(grav_wp_wps_gt)
+    return np.stack((grav_wp_gravs_arr, grav_wp_wps_arr), axis=2), np.stack((grav_wp_gravs_gt_arr, grav_wp_wps_gt_arr), axis=2)
+
 def main():
     seed = 123
     log_dir = "./CPSC532J_FinalProject/src/logs/"
@@ -176,21 +222,28 @@ def main():
     GA_generalist = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/GA-general-policy.pth")
     GA_generalist.eval()
 
-    # # Run some experiments
-    # zero_shot_rewards = EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_archive_df)
-    # np.save(log_dir + "experiments/zero_shot_rewards.npy", zero_shot_rewards)
+    # Run some experiments
+    zero_shot_rewards = EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_archive_df)
+    np.save(log_dir + "experiments/zero_shot_rewards.npy", zero_shot_rewards)
 
-    # rand_ID_rewards = EVAL_rand_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
-    # np.save(log_dir + "experiments/rand_ID_rewards.npy", rand_ID_rewards)
+    rand_ID_rewards = EVAL_rand_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
+    np.save(log_dir + "experiments/rand_ID_rewards.npy", rand_ID_rewards)
 
-    # oracle_ID_rewards = EVAL_oracle_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
-    # np.save(log_dir + "experiments/oracle_ID_rewards.npy", oracle_ID_rewards)
+    oracle_ID_rewards = EVAL_oracle_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
+    np.save(log_dir + "experiments/oracle_ID_rewards.npy", oracle_ID_rewards)
 
-    # GA_generalist_rewards = EVAL_Generalist(num_tests, env_range_res, seed, GA_generalist)
-    # np.save(log_dir + "experiments/GA_generalist_rewards.npy", GA_generalist_rewards)
+    # Takes ~1.25 hrs
+    GA_generalist_rewards = EVAL_Generalist(num_tests, env_range_res, seed, GA_generalist)
+    np.save(log_dir + "experiments/GA_generalist_rewards.npy", GA_generalist_rewards)
 
+    # Takes ~2.5 hrs
     tuned_rewards = EVAL_fine_tune(num_tests, env_range_res, seed, survivor, elite_archive_df)
     np.save(log_dir + "experiments/tuned_rewards.npy", tuned_rewards)
+
+    # Takes ~10 min
+    grav_wp_preds, grav_wp_gt = EVAL_sysID(num_tests, env_range_res, seed, survivor, identifier)
+    np.save(log_dir + "experiments/sysID_preds.npy", grav_wp_preds)
+    np.save(log_dir + "experiments/sysID_gt.npy", grav_wp_gt)
 
 
 if __name__ == "__main__":
