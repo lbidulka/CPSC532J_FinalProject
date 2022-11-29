@@ -27,24 +27,33 @@ def plot_heatmap(value, log_dir, out_name, title, cmap_bounds, cmap='viridis'):
     plt.colorbar()
     plt.ylabel("wp")
     plt.xlabel("grav")
-    
-    plt.title(title)
+    plt.title(title + " Heatmap")
     plt.savefig(log_dir + "plots/" + out_name + "_heatmap.jpg")
     # plt.show()
     plt.clf()
 
+def plot_hist(values, log_dir, out_name, title, num_bins=80):
+    flat_vals = np.reshape(values, (-1,))
+    plt.hist(flat_vals, bins=num_bins)
+    plt.title(title + " Histogram")
+    plt.ylabel("Num occurances")
+    plt.xlabel("Reward")
+    plt.savefig(log_dir + "plots/" + out_name + "_histogram.jpg")
+    # plt.show()
+    plt.clf()
 
 def main():
     log_dir = "./CPSC532J_FinalProject/src/logs/experiments/"
     rewards_files = ["zero_shot_rewards.npy", "rand_ID_rewards.npy", "oracle_ID_rewards.npy", "GA_generalist_rewards.npy", "tuned_rewards.npy"]
-    heatmap_titles = ["0-Shot Mnemosyne Reward Heatmap", "Random ID Reward Heatmap", "Oracle ID Reward Heatmap", "GA Generalist Reward Heatmap", "Fine-tuned Mnemosyne Reward Heatmap"]
+    titles = ["0-Shot Mnemosyne Reward", "Random ID Reward", "Oracle ID Reward", "GA Generalist Reward", "Fine-tuned Mnemosyne Reward"]
     out_names = ["zero_shot_reward", "rand_id_reward", "oracle_id_reward", "ga_generalist_reward", "tuned_reward"]
     # env_range_res = np.load(log_dir + "env_range_res.npy")
 
-    # Plot
-    for rewards_file, title, out_name in zip(rewards_files, heatmap_titles, out_names):
+    # Plot heatmaps and histograms
+    for rewards_file, title, out_name in zip(rewards_files, titles, out_names):
         rewards = np.load(log_dir + rewards_file)
         plot_heatmap(rewards, log_dir, out_name, title, (-100, 400))
+        plot_hist(rewards, log_dir, out_name, title)
         print(out_name + " reward median: ", np.median(np.reshape(rewards, (-1,))))
 
     # Plot sysID
@@ -65,6 +74,7 @@ def main():
                     "SysID wp Error Heatmap", 
                     (0, np.max(wp_medians)),
                     cmap="plasma")
+
 
 if __name__ == "__main__":
     main()

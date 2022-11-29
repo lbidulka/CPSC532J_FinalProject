@@ -19,6 +19,12 @@ from ribs.emitters import ImprovementEmitter
 from ribs.optimizers import Optimizer
 from ribs.visualize import grid_archive_heatmap
 
+SEED = 1234
+
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+
 # Zero shot application of elites to environment range
 def EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_archive_df):
     print("\n ---- 0-Shot Elite Appl. (", str(num_tests)," Runs / Setting)---- ")
@@ -222,25 +228,28 @@ def main():
     GA_generalist = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/GA-general-policy.pth")
     GA_generalist.eval()
 
-    # Run some experiments
+    # Run some experiments ----
+    # 1000 tests takes ~
     zero_shot_rewards = EVAL_zero_shot(num_tests, env_range_res, seed, survivor, identifier, elite_archive_df)
     np.save(log_dir + "experiments/zero_shot_rewards.npy", zero_shot_rewards)
 
+    # 1000 tests takes ~
     rand_ID_rewards = EVAL_rand_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
     np.save(log_dir + "experiments/rand_ID_rewards.npy", rand_ID_rewards)
 
+    # 1000 tests takes ~
     oracle_ID_rewards = EVAL_oracle_ID(num_tests, env_range_res, seed, survivor, elite_archive_df)
     np.save(log_dir + "experiments/oracle_ID_rewards.npy", oracle_ID_rewards)
 
-    # Takes ~1.25 hrs
+    # 1000 tests takes ~1.25 hrs
     GA_generalist_rewards = EVAL_Generalist(num_tests, env_range_res, seed, GA_generalist)
     np.save(log_dir + "experiments/GA_generalist_rewards.npy", GA_generalist_rewards)
 
-    # Takes ~2.5 hrs
+    # 1000 tests takes ~2.5 hrs
     tuned_rewards = EVAL_fine_tune(num_tests, env_range_res, seed, survivor, elite_archive_df)
     np.save(log_dir + "experiments/tuned_rewards.npy", tuned_rewards)
 
-    # Takes ~10 min
+    # 1000 tests takes ~10 min
     grav_wp_preds, grav_wp_gt = EVAL_sysID(num_tests, env_range_res, seed, survivor, identifier)
     np.save(log_dir + "experiments/sysID_preds.npy", grav_wp_preds)
     np.save(log_dir + "experiments/sysID_gt.npy", grav_wp_gt)
