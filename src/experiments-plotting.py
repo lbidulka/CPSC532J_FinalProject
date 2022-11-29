@@ -32,9 +32,9 @@ def plot_reward_heatmap(zero_shot_rewards, env_range_res, log_dir, out_name, tit
 
 def main():
     log_dir = "./CPSC532J_FinalProject/src/logs/experiments/"
-    rewards_files = ["zero_shot_rewards.npy", "rand_ID_rewards.npy", "oracle_ID_rewards.npy", "GA_generalist_rewards.npy"]
-    heatmap_titles = ["0-Shot Mnemosyne Reward Heatmap", "Random ID Reward Heatmap", "Oracle ID Reward Heatmap", "GA Generalist Reward Heatmap"]
-    out_names = ["zero_shot", "rand_id", "oracle_id", "ga_generalist"]
+    rewards_files = ["zero_shot_rewards.npy", "rand_ID_rewards.npy", "oracle_ID_rewards.npy", "GA_generalist_rewards.npy", "tuned_rewards.npy"]
+    heatmap_titles = ["0-Shot Mnemosyne Reward Heatmap", "Random ID Reward Heatmap", "Oracle ID Reward Heatmap", "GA Generalist Reward Heatmap", "Fine-tuned Mnemosyne Reward Heatmap"]
+    out_names = ["zero_shot", "rand_id", "oracle_id", "ga_generalist", "tuned"]
     env_range_res = np.load(log_dir + "env_range_res.npy")
 
     # Plot

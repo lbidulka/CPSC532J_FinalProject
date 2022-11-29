@@ -33,7 +33,7 @@ class sysID(torch.nn.Module):
 class GA_Generalist(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(8, 4)
+        self.fc1 = nn.Linear(8, 4, bias=False)
         
     def forward(self, x):
         x = self.fc1(x)
