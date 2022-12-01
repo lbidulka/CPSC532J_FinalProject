@@ -32,9 +32,10 @@ def plot_heatmap(value, log_dir, out_name, title, cmap_bounds, cmap='viridis'):
     # plt.show()
     plt.clf()
 
-def plot_hist(values, log_dir, out_name, title, num_bins=80):
+def plot_hist(values, log_dir, out_name, title, num_bins, range):
     flat_vals = np.reshape(values, (-1,))
-    plt.hist(flat_vals, bins=num_bins)
+    plt.hist(flat_vals, bins=num_bins, range=range)
+    plt.ylim(0, 20000)
     plt.title(title + " Histogram")
     plt.ylabel("Num occurances")
     plt.xlabel("Reward")
@@ -45,7 +46,7 @@ def plot_hist(values, log_dir, out_name, title, num_bins=80):
 def main():
     log_dir = "./CPSC532J_FinalProject/src/logs/experiments/"
     rewards_files = ["zero_shot_rewards.npy", "rand_ID_rewards.npy", "oracle_ID_rewards.npy", "GA_generalist_rewards.npy", "tuned_rewards.npy"]
-    titles = ["0-Shot Mnemosyne Reward", "Random ID Reward", "Oracle ID Reward", "GA Generalist Reward", "Fine-tuned Mnemosyne Reward"]
+    titles = ["0-Shot ARLA Reward", "Random ID Reward", "Oracle ID Reward", "GA Generalist Reward", "Fine-tuned ARLA Reward"]
     out_names = ["zero_shot_reward", "rand_id_reward", "oracle_id_reward", "ga_generalist_reward", "tuned_reward"]
     # env_range_res = np.load(log_dir + "env_range_res.npy")
 
@@ -53,27 +54,46 @@ def main():
     for rewards_file, title, out_name in zip(rewards_files, titles, out_names):
         rewards = np.load(log_dir + rewards_file)
         plot_heatmap(rewards, log_dir, out_name, title, (-100, 400))
-        plot_hist(rewards, log_dir, out_name, title)
-        print(out_name + " reward median: ", np.median(np.reshape(rewards, (-1,))))
+        plot_hist(rewards, log_dir, out_name, title, 80, (-600, 400))
+        # print(out_name + " reward median: ", np.median(np.reshape(rewards, (-1,))))
 
     # Plot sysID
-    grav_wp_preds = np.load(log_dir + "sysID_preds.npy")
-    grav_wp_gt = np.load(log_dir + "sysID_gt.npy")
-    grav_wp_errs = np.abs(grav_wp_preds - grav_wp_gt)
-    grav_medians = np.median(grav_wp_errs[:,:,0], axis=2)
-    wp_medians = np.median(grav_wp_errs[:,:,1], axis=2)
-    plot_heatmap(grav_wp_errs[:,:,0], 
-                    log_dir, 
-                    "sysID_grav_err", 
-                    "SysID Grav Error Heatmap", 
-                    (0, np.max(grav_medians)), 
-                    cmap="plasma")
-    plot_heatmap(grav_wp_errs[:,:,1], 
-                    log_dir, 
-                    "sysID_wp_err", 
-                    "SysID wp Error Heatmap", 
-                    (0, np.max(wp_medians)),
-                    cmap="plasma")
+    # grav_wp_preds = np.load(log_dir + "sysID_preds.npy")
+    # grav_wp_gt = np.load(log_dir + "sysID_gt.npy")
+    # grav_wp_errs = np.abs(grav_wp_preds - grav_wp_gt)
+    # grav_medians = np.median(grav_wp_errs[:,:,0], axis=2)
+    # wp_medians = np.median(grav_wp_errs[:,:,1], axis=2)
+    # plot_heatmap(grav_wp_errs[:,:,0], 
+    #                 log_dir, 
+    #                 "sysID_grav_err", 
+    #                 "SysID Grav Error", 
+    #                 (0, np.max(grav_medians)), 
+    #                 cmap="plasma")
+    # plot_heatmap(grav_wp_errs[:,:,1], 
+    #                 log_dir, 
+    #                 "sysID_wp_err", 
+    #                 "SysID wp Error", 
+    #                 (0, np.max(wp_medians)),
+    #                 cmap="plasma")
+
+    
+    # grav_wp_preds = np.load(log_dir + "survivor-25/sysID_preds.npy")
+    # grav_wp_gt = np.load(log_dir + "survivor-25/sysID_gt.npy")
+    # grav_wp_errs = np.abs(grav_wp_preds - grav_wp_gt)
+    # grav_medians = np.median(grav_wp_errs[:,:,0], axis=2)
+    # wp_medians = np.median(grav_wp_errs[:,:,1], axis=2)
+    # plot_heatmap(grav_wp_errs[:,:,0], 
+    #                 log_dir, 
+    #                 "survivor-25/sysID_grav_err", 
+    #                 "SysID Grav Error", 
+    #                 (0, np.max(grav_medians)), 
+    #                 cmap="plasma")
+    # plot_heatmap(grav_wp_errs[:,:,1], 
+    #                 log_dir, 
+    #                 "survivor-25/sysID_wp_err", 
+    #                 "SysID wp Error", 
+    #                 (0, np.max(wp_medians)),
+    #                 cmap="plasma")
 
 
 if __name__ == "__main__":

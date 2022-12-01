@@ -6,7 +6,7 @@ import torch
 from models import Survivor
 
 
-def simulate(env, model, seed:int=123):
+def simulate(env, model, seed:int=123, step_limit = 50):
     """Simulates the lunar lander model.
 
     Args:
@@ -24,7 +24,6 @@ def simulate(env, model, seed:int=123):
     done = False
 
     step_count = 0
-    step_limit = 50
 
     trajectory = []
 
@@ -46,7 +45,7 @@ def main():
     seed = 123
 
     # Load survivor 
-    elite = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor-policy.pth")
+    elite = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor.pth")
     elite.eval()
 
     # Run some demos
@@ -60,7 +59,7 @@ def main():
         grav = np.random.uniform(-10.0, 0.0)
         wp = np.random.uniform(0.0, 20.0)
         env = gym.make("LunarLander-v2", enable_wind=True, gravity=grav, wind_power=wp)
-        trajectory = simulate(env, elite, seed)
+        trajectory = simulate(env, elite, seed, step_limit=25)
         trajectories.append(trajectory)
         labels.append((grav, wp))
     

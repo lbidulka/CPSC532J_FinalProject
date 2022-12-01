@@ -6,7 +6,7 @@ from tqdm import tqdm
 import json
 from pathlib import Path
 
-from CPSC532J_FinalProject.src.models import Survivor
+from models import Survivor
 from sim_utils import sim_elite, sim_survivor
 
 from ribs.archives import GridArchive
@@ -70,9 +70,10 @@ def main():
     seed = 123
     action_dim = env.action_space.n
     obs_dim = env.observation_space.shape[0]
+    surv_step_limit = 50
 
     # Load survivor model
-    survivor = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor-policy.pth")
+    survivor = torch.load("./CPSC532J_FinalProject/src/model_checkpoints/Survivor.pth")
     survivor.eval()
 
     # Grid archive stores solutions (models) in a rectangular grid

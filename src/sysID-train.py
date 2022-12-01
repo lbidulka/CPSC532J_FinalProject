@@ -17,10 +17,10 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 
 # Dataset
-batch_size = 2048
+batch_size = 4096
 
-data_path = "./CPSC532J_FinalProject/data/100k_trajectories.npy"
-label_path = "./CPSC532J_FinalProject/data/100k_labels.npy"
+data_path = "./CPSC532J_FinalProject/data/trajectories.npy"
+label_path = "./CPSC532J_FinalProject/data/labels.npy"
 
 dataset = TensorDataset(torch.Tensor(np.load(data_path)),
                                      torch.Tensor(np.load(label_path)))
@@ -38,12 +38,12 @@ testloader = DataLoader(testset, batch_size=batch_size, shuffle=True)
 # Setup
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-Identifier = sysID()
+Identifier = sysID(step_limit=50)
 Identifier = Identifier.to(device)
-optimizer = torch.optim.Adam(Identifier.parameters(), lr=1e-3, weight_decay=1e-4)
+optimizer = torch.optim.Adam(Identifier.parameters(), lr=1e-3, weight_decay=1e-3)
 criterion = torch.nn.MSELoss()
 
-epochs = 10
+epochs = 125
 epoch_printfreq = 1 # Print output frequency
 
 train_losses = []
@@ -111,7 +111,7 @@ plt.plot(train_losses, label="Train Loss")
 plt.plot(val_losses, label="Val Loss")
 plt.xlabel("Epochs")
 plt.ylabel("Loss")
-plt.suptitle("Identifier. Loss")
+plt.suptitle("Identifier Loss")
 plt.legend()
 plt.savefig("./CPSC532J_FinalProject/src/logs/sysID/training_curves.jpg")
 plt.show()  

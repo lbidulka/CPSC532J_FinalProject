@@ -95,7 +95,8 @@ def train(args):
                     for param in offspring.parameters():
                         param += norm.sample(param.shape)
                 new_pop.append(offspring)
-                
+
+        torch.save(new_pop[0], "./CPSC532J_FinalProject/src/model_checkpoints/GA-general-policy.pth")  
         pop = new_pop
         pop_fitness = torch.zeros(len(pop))
 
@@ -104,13 +105,12 @@ def train(args):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--GN", default=78, help="num generations", type=int)
+    parser.add_argument("--GN", default=125, help="num generations", type=int)
     parser.add_argument("--pop_size", default=250, help="initial population size", type=int)
     parser.add_argument("--num_elites", default=3, help="number of elites saved per episode", type=int)
     parser.add_argument("--num_offspring", default=30, help="number of offspring generated from each elite per episode", type=int)
     parser.add_argument("--mu_noise", default=0.5, help="std dev of mutation noise distribution", type=float)
     return parser.parse_args()
-
 
 def main():
     input_args = get_args()

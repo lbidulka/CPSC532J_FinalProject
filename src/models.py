@@ -6,19 +6,18 @@ import torch.nn.functional as F
 class Survivor(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(8, 16)
-        self.fc2 = nn.Linear(16, 4)
+        self.fc1 = nn.Linear(8, 4, bias=False)
         
     def forward(self, x):
-        x = torch.tanh(self.fc1(x))
-        x = torch.tanh(self.fc2(x))
+        x = self.fc1(x)
+        x = F.softmax(x, dim=0)
         return x
 
 # System ID network
 class sysID(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, step_limit):
         super().__init__()
-        self.input_size = 50 * 10
+        self.input_size = step_limit * 10
         self.l1 = nn.Linear(self.input_size, 1026)
         self.l2 = nn.Linear(1026, 512)
         self.l3 = nn.Linear(512, 2)

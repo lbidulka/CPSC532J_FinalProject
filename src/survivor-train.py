@@ -22,7 +22,7 @@ def run_episode(env, policy, seed, render=False):
     frame_count = 0
     state, _ = env.reset(seed=seed)
     init_state = state
-    step_limit = 75
+    step_limit = 50
     while frame_count < step_limit:
         if render:
             env.render()
@@ -32,8 +32,8 @@ def run_episode(env, policy, seed, render=False):
 
         # Take action and observe environment
         state, reward, terminal, _, _ = env.step(action.numpy())
-        # Penalize Eucl. distance from starting state, except lander legs status which have no impact
-        sp_dist = np.linalg.norm(state[:-2] - init_state[:-2], 2)   
+        # Penalize squared Eucl. distance from starting state, except lander legs status which have no impact
+        sp_dist = np.square(np.linalg.norm(state[:-2] - init_state[:-2], 2))
         fitness -= sp_dist
 
         frame_count += 1
@@ -82,7 +82,7 @@ def train(args, env):
         max_fitnesses.append(float(pop_fitness.numpy()[idx[0]]))
         for i in idx:
             new_pop.append(pop[i])
-
+        print("Max fitness: ", max_fitnesses[-1])
         # Create offspring from each of the elites
         for i in range(args.num_elites):
             elite = new_pop[i]
@@ -98,12 +98,12 @@ def train(args, env):
         pop = new_pop
         pop_fitness = torch.zeros(len(pop))
 
-    torch.save(new_pop[0], "./CPSC532J_FinalProject/src/model_checkpoints/Survivor-policy.pth")
+    torch.save(new_pop[0], "./CPSC532J_FinalProject/src/model_checkpoints/Survivor.pth")
     return avg_fitnesses, max_fitnesses
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--GN", default=25, help="num generations", type=int)
+    parser.add_argument("--GN", default=100, help="num generations", type=int)
     parser.add_argument("--pop_size", default=150, help="initial population size", type=int)
     parser.add_argument("--num_elites", default=3, help="number of elites saved per episode", type=int)
     parser.add_argument("--num_offspring", default=30, help="number of offspring generated from each elite per episode", type=int)
@@ -116,7 +116,7 @@ def main():
     # Log input arguments
     print(os.getcwd())
     date_time = time.strftime("%Y%m%d-%H%M%S")
-    log_dir = "./CPSC532J_FinalProject/src/logs/GA/" + date_time 
+    log_dir = "./CPSC532J_FinalProject/src/logs/GA/survivor/" + date_time 
     os.mkdir(log_dir)
     with open(log_dir + "/input_args.json", "w") as fp:
         json.dump(vars(input_args), fp)
